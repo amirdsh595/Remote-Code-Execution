@@ -8,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace RemoteCodeExecutionServer
 {
@@ -22,16 +23,18 @@ namespace RemoteCodeExecutionServer
 
     class Program
     {
-        private const string Username = "BHI78h8uU8G6#%*";
-        private const string Password = "KNKBUBI88h97===";
-        private const string CertFile = "server.pfx";
-        private const string CertPassword = "83831383dsh";
+        private static string Username;
+        private static string Password;
+        private static string CertFile;
+        private static string CertPassword;
 
         // Limit to 20 concurrent clients (adjust as needed)
         private static readonly SemaphoreSlim ClientSemaphore = new SemaphoreSlim(20);
 
         public static async Task Main(string[] args)
         {
+            LoadConfig("RCE-Server.conf");
+
             if (!File.Exists(CertFile))
             {
                 Console.WriteLine($"Certificate file '{CertFile}' not found.");
@@ -66,6 +69,26 @@ namespace RemoteCodeExecutionServer
                     Console.WriteLine("Please choose a different port.");
                 }
             }
+        }
+
+        private static void LoadConfig(string path)
+        {
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var line in File.ReadAllLines(path))
+            {
+                var trimmed = line.Trim();
+                if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#")) continue;
+                var idx = trimmed.IndexOf('=');
+                if (idx < 0) continue;
+                var key = trimmed.Substring(0, idx).Trim();
+                var value = trimmed.Substring(idx + 1).Trim();
+                dict[key] = value;
+            }
+
+            Username = dict.TryGetValue("Username", out var user) ? user : "";
+            Password = dict.TryGetValue("Password", out var pass) ? pass : "";
+            CertFile = dict.TryGetValue("CertFile", out var cert) ? cert : "server.pfx";
+            CertPassword = dict.TryGetValue("CertPassword", out var certPass) ? certPass : "";
         }
 
         public static async Task ServerMain(int port)

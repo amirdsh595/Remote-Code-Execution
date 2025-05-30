@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
@@ -21,11 +22,11 @@ namespace RemoteCodeExecutionClient
 
     class Program
     {
-        private const string ServerIP = "127.0.0.1";
-        private const int ServerPort = 49999;
-        private const string Username = "BHI78h8uU8G6#%*";
-        private const string Password = "KNKBUBI88h97===";
-        private const int HeartbeatInterval = 30000;
+        private static string ServerIP = "";
+        private static int ServerPort;
+        private static string Username = "";
+        private static string Password = "";
+        private static int HeartbeatInterval;
 
         [DllImport("kernel32.dll")]
         private static extern IntPtr GetConsoleWindow();
@@ -36,7 +37,29 @@ namespace RemoteCodeExecutionClient
         [STAThread]
         public static async Task Main(string[] args)
         {
+            LoadConfig("RCE-Client.conf");
             await ClientMain();
+        }
+
+        private static void LoadConfig(string path)
+        {
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var line in File.ReadAllLines(path))
+            {
+                var trimmed = line.Trim();
+                if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#")) continue;
+                var idx = trimmed.IndexOf('=');
+                if (idx < 0) continue;
+                var key = trimmed.Substring(0, idx).Trim();
+                var value = trimmed.Substring(idx + 1).Trim();
+                dict[key] = value;
+            }
+
+            ServerIP = dict.TryGetValue("ServerIP", out var ip) ? ip : "127.0.0.1";
+            ServerPort = dict.TryGetValue("ServerPort", out var port) && int.TryParse(port, out var p) ? p : 49999;
+            Username = dict.TryGetValue("Username", out var user) ? user : "";
+            Password = dict.TryGetValue("Password", out var pass) ? pass : "";
+            HeartbeatInterval = dict.TryGetValue("HeartbeatInterval", out var hb) && int.TryParse(hb, out var hbi) ? hbi : 30000;
         }
 
         public static async Task ClientMain()
