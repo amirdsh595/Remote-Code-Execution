@@ -1,0 +1,165 @@
+Guide to Using the Remote Code Execution Program (English)
+This program is a remote code execution tool designed for educational purposes. It consists of two components: a server and a client. The server runs on the attacker's machine, while the client runs on the victim's machine. The client connects to the server, enabling the server to send commands for execution on the victim's machine.
+Prerequisites
+
+SSL Certificate: The server requires an SSL certificate (e.g., server.pfx) for secure communication. Ensure this certificate is available in the server's directory.
+Dependencies: The program relies on .NET libraries for networking and security. Ensure the .NET runtime is installed on both the server and client machines.
+
+Setting Up the Server
+
+Run the Server Program:
+
+Launch the server application on the attacker's machine.
+When prompted, enter a port number that matches the port configured in the client. The server will listen on this port for incoming connections from the client.
+
+
+Multiple Instances:
+
+To target multiple computers, run separate instances of the server program, each on a unique port that corresponds to the ports set in the respective clients.
+
+
+
+Setting Up the Client
+
+Configure the Client:
+
+The client must be pre-configured with the server's IP address and port number. Verify these values are correctly set in the client's code or configuration file.
+
+
+Run the Client Program:
+
+Execute the client application on the victim's machine.
+The client will attempt to connect to the server using the specified IP address and port.
+
+
+
+Authentication
+
+Upon establishing a connection, the client sends a username and password to the server.
+The server verifies these credentials against predefined values.
+If authentication is successful, the server gains the ability to send commands to the client.
+
+Executing Commands
+
+The server can send commands to the client for execution on the victim's machine.
+The client returns the results of these commands to the server.
+Special Commands:
+/keylog: Initiates keylogging on the client's machine. Key presses are displayed in real-time on the server and logged to a file on the client.
+/rce: Switches back to command execution mode from keylogging mode.
+/exit: Gracefully disconnects the client from the server.
+/exit -f: Forces both the client and server to terminate immediately.
+
+
+
+File Transfer
+
+Upload a File:
+
+Use the command upload <file_path> to transfer a file from the client to the server.
+Files are transferred in chunks to efficiently handle large sizes.
+
+
+Download a File:
+
+Use the command download <file_path> to transfer a file from the server to the client.
+The server sends the file in chunks, and the client reassembles it.
+
+
+
+Logging
+
+Command Logging:
+
+The server records all executed commands and their results in a log file (e.g., server_<port>.log).
+
+
+Key Logging:
+
+Key presses are logged to a file on the client's machine with timestamps in the format <YYYY/MM/DD HH:MM: KEYS>.
+In keylogging mode, key presses are also transmitted to the server in real-time.
+
+
+
+
+راهنمای استفاده از برنامه اجرای کد از راه دور (Persian)
+این برنامه یک ابزار اجرای کد از راه دور است که برای اهداف آموزشی طراحی شده است. این برنامه از دو بخش تشکیل شده است: سرور و کلاینت. سرور روی دستگاه مهاجم اجرا می‌شود و کلاینت روی دستگاه قربانی. کلاینت به سرور متصل می‌شود و سرور می‌تواند دستوراتی را برای اجرا روی دستگاه قربانی ارسال کند.
+پیش‌نیازها
+
+گواهی SSL: سرور به یک گواهی SSL (مانند server.pfx) برای ارتباطات امن نیاز دارد. اطمینان حاصل کنید که این گواهی در دایرکتوری سرور موجود است.
+وابستگی‌ها: این برنامه از کتابخانه‌های .NET برای شبکه و امنیت استفاده می‌کند. مطمئن شوید که runtime .NET روی هر دو دستگاه سرور و کلاینت نصب شده است.
+
+راه‌اندازی سرور
+
+اجرای برنامه سرور:
+
+برنامه سرور را روی دستگاه مهاجم اجرا کنید.
+هنگام درخواست، شماره پورت را وارد کنید که با پورت تنظیم‌شده در کلاینت مطابقت دارد. سرور روی این پورت برای اتصال از کلاینت گوش می‌دهد.
+
+
+نمونه‌های متعدد:
+
+برای هدف قرار دادن چندین کامپیوتر، نمونه‌های جداگانه‌ای از برنامه سرور را اجرا کنید، هر کدام روی یک پورت منحصربه‌فرد که با پورت‌های تنظیم‌شده در کلاینت‌های مربوطه مطابقت دارد.
+
+
+
+راه‌اندازی کلاینت
+
+پیکربندی کلاینت:
+
+کلاینت باید با آدرس IP و شماره پورت سرور از قبل پیکربندی شده باشد. بررسی کنید که این مقادیر به درستی در کد یا فایل پیکربندی کلاینت تنظیم شده‌اند.
+
+
+اجرای برنامه کلاینت:
+
+برنامه کلاینت را روی دستگاه قربانی اجرا کنید.
+کلاینت تلاش می‌کند با استفاده از آدرس IP و پورت مشخص‌شده به سرور متصل شود.
+
+
+
+احراز هویت
+
+پس از برقراری اتصال، کلاینت یک نام کاربری و رمز عبور به سرور ارسال می‌کند.
+سرور این اطلاعات را با مقادیر از پیش تعریف‌شده بررسی می‌کند.
+در صورت موفقیت‌آمیز بودن احراز هویت، سرور می‌تواند دستوراتی به کلاینت ارسال کند.
+
+اجرای دستورات
+
+سرور می‌تواند دستوراتی را به کلاینت ارسال کند که روی دستگاه قربانی اجرا می‌شوند.
+کلاینت نتایج اجرای دستورات را به سرور بازمی‌گرداند.
+دستورات ویژه:
+/keylog: ثبت کلیدهای فشرده‌شده روی دستگاه کلاینت را آغاز می‌کند. کلیدهای فشرده‌شده به صورت زنده روی سرور نمایش داده می‌شوند و در فایلی روی کلاینت ثبت می‌شوند.
+/rce: از حالت ثبت کلید به حالت اجرای دستور بازمی‌گردد.
+/exit: اتصال کلاینت را به صورت graceful قطع می‌کند.
+/exit -f: هر دو کلاینت و سرور را به صورت فوری مجبور به خاتمه می‌کند.
+
+
+
+انتقال فایل
+
+آپلود فایل:
+
+از دستور upload <file_path> برای انتقال فایل از کلاینت به سرور استفاده کنید.
+فایل‌ها به صورت تکه‌تکه منتقل می‌شوند تا اندازه‌های بزرگ به طور کارآمد مدیریت شوند.
+
+
+دانلود فایل:
+
+از دستور download <file_path> برای انتقال فایل از سرور به کلاینت استفاده کنید.
+سرور فایل را به صورت تکه‌تکه ارسال می‌کند و کلاینت آن را دوباره مونتاژ می‌کند.
+
+
+
+ثبت وقایع
+
+ثبت دستورات:
+
+سرور تمام دستورات اجرا شده و نتایج آن‌ها را در یک فایل لاگ (مانند server_<port>.log) ثبت می‌کند.
+
+
+ثبت کلیدها:
+
+کلیدهای فشرده‌شده در فایلی روی دستگاه کلاینت با مهر زمانی در قالب <YYYY/MM/DD HH:MM: KEYS> ثبت می‌شوند.
+در حالت ثبت کلید، کلیدهای فشرده‌شده به صورت زنده به سرور ارسال می‌شوند.
+
+
+

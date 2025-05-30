@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35303.130
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RCE-Server", "RCE-Server.csproj", "{426F61B2-0E34-4D2C-8DAC-6F440AA0687D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{426F61B2-0E34-4D2C-8DAC-6F440AA0687D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{426F61B2-0E34-4D2C-8DAC-6F440AA0687D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{426F61B2-0E34-4D2C-8DAC-6F440AA0687D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{426F61B2-0E34-4D2C-8DAC-6F440AA0687D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9DA2088B-1E72-47BF-B455-D36D66F5AD93}
+	EndGlobalSection
+EndGlobal
